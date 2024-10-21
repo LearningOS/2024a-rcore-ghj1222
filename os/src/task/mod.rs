@@ -124,7 +124,7 @@ impl TaskManager {
         *counter = inner.tasks[current].syscall_counter;
     }
 
-    fn update_syscall_counter(&self, syscall_id: u32) {
+    fn update_syscall_counter(&self, syscall_id: usize) {
         let mut inner = self.inner.exclusive_access();
         let current = inner.current_task;
         inner.tasks[current].syscall_counter[syscall_id] += 1;
@@ -200,7 +200,7 @@ pub fn get_current_syscall_counter(counter: &mut[u32; MAX_SYSCALL_NUM]) {
 }
 
 /// Update syscall counter
-pub fn update_syscall_counter(syscall_id: u32) {
+pub fn update_syscall_counter(syscall_id: usize) {
     TASK_MANAGER.update_syscall_counter(syscall_id)
 }
 
