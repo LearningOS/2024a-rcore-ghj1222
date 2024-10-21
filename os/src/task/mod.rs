@@ -124,6 +124,12 @@ impl TaskManager {
         *counter = inner.tasks[current].syscall_counter;
     }
 
+    fn update_syscall_counter(&self, syscall_id: u32) {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].syscall_counter[syscall_id] += 1;
+    }
+
     /// Find next task to run and return task id.
     ///
     /// In this case, we only return the first `Ready` task in task list.
@@ -191,6 +197,11 @@ pub fn get_current_start_time() -> usize {
 /// Get syscall counter array of current task
 pub fn get_current_syscall_counter(counter: &mut[u32; MAX_SYSCALL_NUM]) {
     TASK_MANAGER.get_current_syscall_counter(counter)
+}
+
+/// Update syscall counter
+pub fn update_syscall_counter(syscall_id: u32) {
+    TASK_MANAGER.update_syscall_counter(syscall_id)
 }
 
 /// Suspend the current 'Running' task and run the next task in task list.
