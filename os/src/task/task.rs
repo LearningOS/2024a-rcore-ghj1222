@@ -11,6 +11,8 @@ pub struct TaskControlBlock {
     pub task_status: TaskStatus,
     /// The task context
     pub task_cx: TaskContext,
+    /// task has begin or not
+    pub begin: bool,
     /// start time
     pub st_time: usize,
     /// syscall counter
@@ -22,8 +24,6 @@ pub struct TaskControlBlock {
 pub enum TaskStatus {
     /// uninitialized
     UnInit,
-    /// initialized but not run,
-    Init,
     /// ready to run
     Ready,
     /// running

@@ -55,12 +55,13 @@ lazy_static! {
         let mut tasks = [TaskControlBlock {
             task_cx: TaskContext::zero_init(),
             task_status: TaskStatus::UnInit,
+            begin: false,
             st_time: 0,
             syscall_counter: [0; MAX_SYSCALL_NUM],
         }; MAX_APP_NUM];
         for (i, task) in tasks.iter_mut().enumerate() {
             task.task_cx = TaskContext::goto_restore(init_app_cx(i));
-            task.task_status = TaskStatus::Init;
+            task.task_status = TaskStatus::Ready;
         }
         TaskManager {
             num_app,
@@ -82,9 +83,9 @@ impl TaskManager {
     fn run_first_task(&self) -> ! {
         let mut inner = self.inner.exclusive_access();
         let task0 = &mut inner.tasks[0];
-        let old_task_status = task0.task_status;
         task0.task_status = TaskStatus::Running;
-        if old_task_status == TaskStatus::Init {
+        if task0.begin == false {
+            task0.begin = true;
             task0.syscall_counter = [0; MAX_SYSCALL_NUM];
             task0.st_time = get_time_ms();
         }
@@ -147,9 +148,9 @@ impl TaskManager {
         if let Some(next) = self.find_next_task() {
             let mut inner = self.inner.exclusive_access();
             let current = inner.current_task;
-            let old_task_status = inner.tasks[next].task_status;
             inner.tasks[next].task_status = TaskStatus::Running;
-            if old_task_status == TaskStatus::Init {
+            if inner.tasks[next].begin == false {
+                inner.tasks[next].begin = true;
                 inner.tasks[next].syscall_counter = [0; MAX_SYSCALL_NUM];
                 inner.tasks[next].st_time = get_time_ms();
             }
