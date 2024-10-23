@@ -1,10 +1,11 @@
 //! Types related to task management & Functions for completely changing TCB
 use super::TaskContext;
 use super::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
-use crate::config::TRAP_CONTEXT_BASE;
 use crate::fs::{File, Stdin, Stdout};
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
+use crate::config::{MAX_SYSCALL_NUM, TRAP_CONTEXT_BASE};
+use crate::timer::get_time_ms;
 use crate::trap::{trap_handler, TrapContext};
 use alloc::sync::{Arc, Weak};
 use alloc::vec;
@@ -71,6 +72,15 @@ pub struct TaskControlBlockInner {
 
     /// Program break
     pub program_brk: usize,
+
+    /// Is task run?
+    pub first_run: bool,
+
+    /// start time
+    pub st_time: usize,
+
+    /// syscall counter
+    pub syscall_counter: [u32; MAX_SYSCALL_NUM],
 }
 
 impl TaskControlBlockInner {
@@ -135,6 +145,9 @@ impl TaskControlBlock {
                     ],
                     heap_bottom: user_sp,
                     program_brk: user_sp,
+                    first_run: false,
+                    st_time: 0,
+                    syscall_counter: [0; MAX_SYSCALL_NUM],
                 })
             },
         };
@@ -216,6 +229,9 @@ impl TaskControlBlock {
                     fd_table: new_fd_table,
                     heap_bottom: parent_inner.heap_bottom,
                     program_brk: parent_inner.program_brk,
+                    first_run: parent_inner.first_run,
+                    st_time: parent_inner.st_time,
+                    syscall_counter: parent_inner.syscall_counter,
                 })
             },
         });
@@ -260,6 +276,33 @@ impl TaskControlBlock {
         } else {
             None
         }
+    }
+
+    /// get the run time of task
+    pub fn get_task_run_time(&self) -> usize {
+        let inner = self.inner.exclusive_access();
+        let cur_time = get_time_ms();
+        cur_time - inner.st_time
+    }
+
+    /// get the syscall counter of task
+    pub fn get_task_syscall_counter(&self, ret: &mut [u32; MAX_SYSCALL_NUM]) {
+        let inner = self.inner.exclusive_access();
+        for i in 0..MAX_SYSCALL_NUM {
+            ret[i] = inner.syscall_counter[i];
+        }
+    }
+
+    /// update syscall counter
+    pub fn set_task_syscall_counter(&self, syscall_id: usize) {
+        let mut inner = self.inner.exclusive_access();
+        inner.syscall_counter[syscall_id] += 1;
+    }
+
+    /// do memory copy
+    pub fn copy_out<T>(&self, data: &T, addr: *mut T) {
+        let inner = self.inner.exclusive_access();
+        inner.memory_set.copy_out(data, addr);
     }
 }
 
