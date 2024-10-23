@@ -2,8 +2,8 @@
 use crate::{
     config::MAX_SYSCALL_NUM,
     task::{
-        change_program_brk, exit_current_and_run_next, suspend_current_and_run_next, TaskStatus,
-    },
+        change_program_brk, copy_out, exit_current_and_run_next, get_task_run_time, get_task_syscall_counter, suspend_current_and_run_next, TaskStatus
+    }, timer::get_time_us,
 };
 
 #[repr(C)]
@@ -41,17 +41,30 @@ pub fn sys_yield() -> isize {
 /// YOUR JOB: get time with second and microsecond
 /// HINT: You might reimplement it with virtual memory management.
 /// HINT: What if [`TimeVal`] is splitted by two pages ?
-pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
+pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
     trace!("kernel: sys_get_time");
-    -1
+    let us: usize = get_time_us();
+    let t = TimeVal {
+        sec: us / 1_000_000,
+        usec: us % 1_000_000,
+    };
+    copy_out(&t, ts);
+    0
 }
 
 /// YOUR JOB: Finish sys_task_info to pass testcases
 /// HINT: You might reimplement it with virtual memory management.
 /// HINT: What if [`TaskInfo`] is splitted by two pages ?
-pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
-    trace!("kernel: sys_task_info NOT IMPLEMENTED YET!");
-    -1
+pub fn sys_task_info(ti: *mut TaskInfo) -> isize {
+    trace!("kernel: sys_task_info");
+    let mut ti_kernel = TaskInfo {
+        status: TaskStatus::Running,
+        syscall_times: [0; MAX_SYSCALL_NUM],
+        time: get_task_run_time(),
+    };
+    get_task_syscall_counter(&mut ti_kernel.syscall_times);
+    copy_out(&ti_kernel, ti);
+    0
 }
 
 // YOUR JOB: Implement mmap.
