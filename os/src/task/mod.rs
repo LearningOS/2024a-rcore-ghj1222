@@ -133,6 +133,16 @@ pub fn set_task_syscall_counter(syscall_id: usize) {
 }
 
 /// copy data to user space
-pub fn copy_out<T>(data: &T, addr: *mut T) {
-    current_task().unwrap().copy_out(data, addr);
+pub fn copy_out<T>(data: &T, addr: *mut T) -> Result<(), ()> {
+    current_task().unwrap().copy_out(data, addr)
+}
+
+/// do memory map
+pub fn mmap(start: usize, len: usize, port: usize) -> Result<(), ()> {
+    current_task().unwrap().mmap(start, len, port)
+}
+
+/// do memory unmap
+pub fn munmap(start: usize, len: usize) -> Result<(), ()> {
+    current_task().unwrap().munmap(start, len)
 }

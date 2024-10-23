@@ -275,9 +275,21 @@ impl TaskControlBlock {
     }
 
     /// do memory copy
-    pub fn copy_out<T>(&self, data: &T, addr: *mut T) {
+    pub fn copy_out<T>(&self, data: &T, addr: *mut T) -> Result<(), ()> {
         let inner = self.inner.exclusive_access();
-        inner.memory_set.copy_out(data, addr);
+        inner.memory_set.copy_out(data, addr)
+    }
+
+    /// do memory map
+    pub fn mmap(&self, start: usize, len: usize, port: usize) -> Result<(), ()> {
+        let mut inner = self.inner.exclusive_access();
+        inner.memory_set.mmap(start, len, port)
+    }
+
+    /// do memory unmap
+    pub fn munmap(&self, start: usize, len: usize) -> Result<(), ()> {
+        let mut inner = self.inner.exclusive_access();
+        inner.memory_set.munmap(start, len)
     }
 }
 

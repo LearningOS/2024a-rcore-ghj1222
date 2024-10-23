@@ -6,9 +6,7 @@ use crate::{
     loader::get_app_data_by_name,
     mm::{translated_refmut, translated_str},
     task::{
-        add_task, current_task, current_user_token, exit_current_and_run_next,
-        suspend_current_and_run_next, TaskStatus,
-        copy_out, get_task_run_time, get_task_syscall_counter,
+        add_task, copy_out, current_task, current_user_token, exit_current_and_run_next, get_task_run_time, get_task_syscall_counter, mmap, munmap, suspend_current_and_run_next, TaskStatus
     },
     timer::get_time_us,
 };
@@ -129,8 +127,10 @@ pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
         sec: us / 1_000_000,
         usec: us % 1_000_000,
     };
-    copy_out(&t, ts);
-    0
+    match copy_out(&t, ts) {
+        Ok(()) => 0,
+        Err(()) => -1,
+    }
 }
 
 /// YOUR JOB: Finish sys_task_info to pass testcases
@@ -147,26 +147,34 @@ pub fn sys_task_info(ti: *mut TaskInfo) -> isize {
         time: get_task_run_time(),
     };
     get_task_syscall_counter(&mut ti_kernel.syscall_times);
-    copy_out(&ti_kernel, ti);
-    0
+    match copy_out(&ti_kernel, ti) {
+        Ok(()) => 0,
+        Err(()) => -1,
+    }
 }
 
 /// YOUR JOB: Implement mmap.
-pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
+pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
     trace!(
-        "kernel:pid[{}] sys_mmap NOT IMPLEMENTED",
+        "kernel:pid[{}] sys_mmap",
         current_task().unwrap().pid.0
     );
-    -1
+    match mmap(start, len, port) {
+        Ok(()) => 0,
+        Err(()) => -1,
+    }
 }
 
 /// YOUR JOB: Implement munmap.
-pub fn sys_munmap(_start: usize, _len: usize) -> isize {
+pub fn sys_munmap(start: usize, len: usize) -> isize {
     trace!(
-        "kernel:pid[{}] sys_munmap NOT IMPLEMENTED",
+        "kernel:pid[{}] sys_munmap",
         current_task().unwrap().pid.0
     );
-    -1
+    match munmap(start, len) {
+        Ok(()) => 0,
+        Err(()) => -1,
+    }
 }
 
 /// change data segment size
