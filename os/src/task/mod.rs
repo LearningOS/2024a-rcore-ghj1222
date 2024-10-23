@@ -184,10 +184,22 @@ impl TaskManager {
         inner.tasks[cur].syscall_counter[syscall_id] += 1;
     }
 
-    fn copy_out<T>(&self, data: &T, addr: *mut T) {
+    fn copy_out<T>(&self, data: &T, addr: *mut T) -> Result<(), ()> {
         let inner = self.inner.exclusive_access();
         let cur = inner.current_task;
-        inner.tasks[cur].memory_set.copy_out(data, addr);
+        inner.tasks[cur].memory_set.copy_out(data, addr)
+    }
+
+    fn mmap(&self, start: usize, len: usize, port: usize) -> Result<(), ()> {
+        let mut inner = self.inner.exclusive_access();
+        let cur = inner.current_task;
+        inner.tasks[cur].memory_set.mmap(start, len, port)
+    }
+
+    fn munmap(&self, start: usize, len: usize) -> Result<(), ()> {
+        let mut inner = self.inner.exclusive_access();
+        let cur = inner.current_task;
+        inner.tasks[cur].memory_set.munmap(start, len)
     }
 }
 
@@ -255,6 +267,16 @@ pub fn set_task_syscall_counter(syscall_id: usize) {
 }
 
 /// copy data to user space
-pub fn copy_out<T>(data: &T, addr: *mut T) {
-    TASK_MANAGER.copy_out(data, addr);
+pub fn copy_out<T>(data: &T, addr: *mut T) -> Result<(), ()> {
+    TASK_MANAGER.copy_out(data, addr)
+}
+
+/// do memory map
+pub fn mmap(start: usize, len: usize, port: usize) -> Result<(), ()> {
+    TASK_MANAGER.mmap(start, len, port)
+}
+
+/// do memory unmap
+pub fn munmap(start: usize, len: usize) -> Result<(), ()> {
+    TASK_MANAGER.munmap(start, len)
 }
