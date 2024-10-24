@@ -3,12 +3,13 @@ use super::TaskContext;
 use super::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
-use crate::config::{MAX_SYSCALL_NUM, TRAP_CONTEXT_BASE};
+use crate::config::{BIG_STRIDE, DEFAULT_PRIORITY, MAX_SYSCALL_NUM, TRAP_CONTEXT_BASE};
 use crate::timer::get_time_ms;
 use crate::trap::{trap_handler, TrapContext};
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 use core::cell::RefMut;
+use core::cmp::Ordering;
 
 /// Task control block structure
 ///
@@ -78,6 +79,12 @@ pub struct TaskControlBlockInner {
 
     /// syscall counter
     pub syscall_counter: [u32; MAX_SYSCALL_NUM],
+
+    /// progress
+    pub stride: usize,
+
+    /// stride priority
+    pub priority: usize,
 }
 
 impl TaskControlBlockInner {
@@ -131,6 +138,8 @@ impl TaskControlBlock {
                     first_run: false,
                     st_time: 0,
                     syscall_counter: [0; MAX_SYSCALL_NUM],
+                    stride: 0,
+                    priority: DEFAULT_PRIORITY,
                 })
             },
         };
@@ -178,6 +187,8 @@ impl TaskControlBlock {
                     first_run: false,
                     st_time: 0,
                     syscall_counter: [0; MAX_SYSCALL_NUM],
+                    stride: 0,
+                    priority: DEFAULT_PRIORITY,
                 })
             },
         });
@@ -224,6 +235,8 @@ impl TaskControlBlock {
         inner.base_size = user_sp;
         inner.st_time = get_time_ms();
         inner.syscall_counter = [0; MAX_SYSCALL_NUM];
+        inner.stride = 0;
+        inner.priority = DEFAULT_PRIORITY;
         // initialize trap_cx
         let trap_cx = inner.get_trap_cx();
         *trap_cx = TrapContext::app_init_context(
@@ -268,6 +281,8 @@ impl TaskControlBlock {
                     first_run: parent_inner.first_run,
                     st_time: parent_inner.st_time,
                     syscall_counter: parent_inner.syscall_counter,
+                    stride: parent_inner.stride,
+                    priority: parent_inner.priority,
                 })
             },
         });
@@ -351,6 +366,47 @@ impl TaskControlBlock {
     pub fn munmap(&self, start: usize, len: usize) -> Result<(), ()> {
         let mut inner = self.inner.exclusive_access();
         inner.memory_set.munmap(start, len)
+    }
+
+    /// set priority of current task
+    pub fn set_prio(&self, prio: usize) {
+        let mut inner = self.inner.exclusive_access();
+        inner.priority = prio;
+    }
+
+    /// add stride for a process
+    pub fn add_stride(&self) {
+        let mut inner = self.inner_exclusive_access();
+        inner.stride += BIG_STRIDE / inner.priority;
+    }
+}
+
+impl PartialEq for TaskControlBlock {
+    fn eq(&self, other: &Self) -> bool {
+        let my_stride = self.inner_exclusive_access().stride;
+        let other_stride = other.inner_exclusive_access().stride;
+        my_stride == other_stride
+    }
+}
+
+impl Eq for TaskControlBlock {
+    
+}
+
+
+impl PartialOrd for TaskControlBlock {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        let my_stride = self.inner_exclusive_access().stride;
+        let other_stride = other.inner_exclusive_access().stride;
+        my_stride.partial_cmp(&other_stride)
+    }
+}
+
+impl Ord for TaskControlBlock {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let my_stride = self.inner_exclusive_access().stride;
+        let other_stride = other.inner_exclusive_access().stride;
+        my_stride.cmp(&other_stride)
     }
 }
 
