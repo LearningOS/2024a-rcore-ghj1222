@@ -23,7 +23,6 @@ mod task;
 
 use crate::loader::get_app_data_by_name;
 use alloc::sync::Arc;
-use crate::config::MAX_SYSCALL_NUM;
 use lazy_static::*;
 pub use manager::{fetch_task, TaskManager};
 use switch::__switch;
@@ -115,34 +114,4 @@ lazy_static! {
 ///Add init process to the manager
 pub fn add_initproc() {
     add_task(INITPROC.clone());
-}
-
-/// get task run time
-pub fn get_task_run_time() -> usize {
-    current_task().unwrap().get_task_run_time()
-}
-
-/// get task syscall counter
-pub fn get_task_syscall_counter(ret: &mut [u32; MAX_SYSCALL_NUM]) {
-    current_task().unwrap().get_task_syscall_counter(ret)
-}
-
-/// set task syscall counter
-pub fn set_task_syscall_counter(syscall_id: usize) {
-    current_task().unwrap().set_task_syscall_counter(syscall_id);
-}
-
-/// copy data to user space
-pub fn copy_out<T>(data: &T, addr: *mut T) -> Result<(), ()> {
-    current_task().unwrap().copy_out(data, addr)
-}
-
-/// do memory map
-pub fn mmap(start: usize, len: usize, port: usize) -> Result<(), ()> {
-    current_task().unwrap().mmap(start, len, port)
-}
-
-/// do memory unmap
-pub fn munmap(start: usize, len: usize) -> Result<(), ()> {
-    current_task().unwrap().munmap(start, len)
 }

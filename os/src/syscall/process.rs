@@ -6,7 +6,7 @@ use crate::{
     loader::get_app_data_by_name,
     mm::{translated_refmut, translated_str},
     task::{
-        add_task, copy_out, current_task, current_user_token, exit_current_and_run_next, get_task_run_time, get_task_syscall_counter, mmap, munmap, suspend_current_and_run_next, TaskStatus
+        add_task, current_task, current_user_token, exit_current_and_run_next, suspend_current_and_run_next, TaskStatus
     },
     timer::get_time_us,
 };
@@ -127,7 +127,7 @@ pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
         sec: us / 1_000_000,
         usec: us % 1_000_000,
     };
-    match copy_out(&t, ts) {
+    match current_task().unwrap().copy_out(&t, ts) {
         Ok(()) => 0,
         Err(()) => -1,
     }
@@ -144,10 +144,10 @@ pub fn sys_task_info(ti: *mut TaskInfo) -> isize {
     let mut ti_kernel = TaskInfo {
         status: TaskStatus::Running,
         syscall_times: [0; MAX_SYSCALL_NUM],
-        time: get_task_run_time(),
+        time: current_task().unwrap().get_task_run_time(),
     };
-    get_task_syscall_counter(&mut ti_kernel.syscall_times);
-    match copy_out(&ti_kernel, ti) {
+    current_task().unwrap().get_task_syscall_counter(&mut ti_kernel.syscall_times);
+    match current_task().unwrap().copy_out(&ti_kernel, ti) {
         Ok(()) => 0,
         Err(()) => -1,
     }
@@ -159,7 +159,7 @@ pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
         "kernel:pid[{}] sys_mmap",
         current_task().unwrap().pid.0
     );
-    match mmap(start, len, port) {
+    match current_task().unwrap().mmap(start, len, port) {
         Ok(()) => 0,
         Err(()) => -1,
     }
@@ -171,7 +171,7 @@ pub fn sys_munmap(start: usize, len: usize) -> isize {
         "kernel:pid[{}] sys_munmap",
         current_task().unwrap().pid.0
     );
-    match munmap(start, len) {
+    match current_task().unwrap().munmap(start, len) {
         Ok(()) => 0,
         Err(()) => -1,
     }
@@ -189,12 +189,24 @@ pub fn sys_sbrk(size: i32) -> isize {
 
 /// YOUR JOB: Implement spawn.
 /// HINT: fork + exec =/= spawn
-pub fn sys_spawn(_path: *const u8) -> isize {
+pub fn sys_spawn(path: *const u8) -> isize {
     trace!(
-        "kernel:pid[{}] sys_spawn NOT IMPLEMENTED",
+        "kernel:pid[{}] sys_spawn",
         current_task().unwrap().pid.0
     );
-    -1
+    let token = current_user_token();
+    let path = translated_str(token, path);
+    if let Some(data) = get_app_data_by_name(path.as_str()) {
+        let current_task = current_task().unwrap();
+        let new_task = current_task.spawn(data);
+        let new_pid = new_task.pid.0;
+        let trap_cx = new_task.inner_exclusive_access().get_trap_cx();
+        trap_cx.x[10] = 0;
+        add_task(new_task);
+        new_pid as isize
+    } else {
+        -1
+    }
 }
 
 // YOUR JOB: Set task priority.
