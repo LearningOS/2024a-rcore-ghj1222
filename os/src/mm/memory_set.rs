@@ -293,6 +293,30 @@ impl MemorySet {
             false
         }
     }
+
+    fn copy_out_raw(&self, data: &[u8], addr: usize) -> Result<(), ()> {
+        let len = data.len();
+        // self.user_check(addr, addr + len)?;
+        let mut current_vpn = VirtAddr::from(addr).floor();
+        let addr_end = addr+len;
+        while current_vpn.0*PAGE_SIZE<addr_end {
+            // vpn...
+            let addr_vp = (current_vpn.0)*PAGE_SIZE;
+            let addr_l = ((current_vpn.0)*PAGE_SIZE).max(addr);
+            let addr_r = ((current_vpn.0+1)*PAGE_SIZE).min(addr_end);
+            let dst = &mut self.translate(current_vpn).unwrap().ppn().get_bytes_array()[addr_l-addr_vp..addr_r-addr_vp];
+            dst.copy_from_slice(&data[addr_l-addr..addr_r-addr]);
+            current_vpn.step();
+        }
+        Ok(())
+    }
+
+    /// copy data from kernel to user
+    pub fn copy_out<T>(&self, data: &T, addr: *mut T) -> Result<(), ()> {
+        let len = core::mem::size_of::<T>();
+        let data = unsafe { core::slice::from_raw_parts(data as *const T as *const u8, len) };
+        self.copy_out_raw(data, addr as *mut u8 as usize)
+    }
 }
 
 pub struct MapArea {

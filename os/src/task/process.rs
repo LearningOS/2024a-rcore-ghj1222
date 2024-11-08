@@ -49,6 +49,12 @@ pub struct ProcessControlBlockInner {
     pub semaphore_list: Vec<Option<Arc<Semaphore>>>,
     /// condvar list
     pub condvar_list: Vec<Option<Arc<Condvar>>>,
+    /// mutex stat
+    pub mutex: Vec<Option<bool>>,
+    /// semaphore stat
+    pub semaphore: Vec<Option<isize>>,
+    /// enabled
+    pub deadlock_detect_enabled: bool,
 }
 
 impl ProcessControlBlockInner {
@@ -119,6 +125,9 @@ impl ProcessControlBlock {
                     mutex_list: Vec::new(),
                     semaphore_list: Vec::new(),
                     condvar_list: Vec::new(),
+                    mutex: Vec::new(),
+                    semaphore: Vec::new(),
+                    deadlock_detect_enabled: false,
                 })
             },
         });
@@ -245,6 +254,9 @@ impl ProcessControlBlock {
                     mutex_list: Vec::new(),
                     semaphore_list: Vec::new(),
                     condvar_list: Vec::new(),
+                    mutex: Vec::new(),
+                    semaphore: Vec::new(),
+                    deadlock_detect_enabled: false,
                 })
             },
         });
@@ -281,5 +293,84 @@ impl ProcessControlBlock {
     /// get pid
     pub fn getpid(&self) -> usize {
         self.pid.0
+    }
+
+    /// mutex lock
+    pub fn mutex_lock(&self, mutex_id: usize) {
+        let mut inner = self.inner.exclusive_access();
+        inner.mutex[mutex_id] = Some(true);
+    }
+    /// mutex unlock
+    pub fn mutex_unlock(&self, mutex_id: usize) {
+        let mut inner = self.inner.exclusive_access();
+        inner.mutex[mutex_id] = Some(false);
+    }
+    /// semaphore up
+    pub fn semaphore_up(&self, semaphore_id: usize) {
+        let mut inner = self.inner.exclusive_access();
+        inner.semaphore[semaphore_id] = inner.semaphore[semaphore_id].map(|x| x + 1);
+    }
+    /// semaphore down
+    pub fn semaphore_down(&self, semaphore_id: usize) {
+        let mut inner = self.inner.exclusive_access();
+        inner.semaphore[semaphore_id] = inner.semaphore[semaphore_id].map(|x| x - 1);
+    }
+
+    /// deadlock detect
+    pub fn deadlock_detect(&self) -> bool {
+        debug!("deadlock detect");
+        let inner = self.inner.exclusive_access();
+        
+        let mut mutex = inner.mutex.clone();
+        let mut semaphore = inner.semaphore.clone();
+        debug!("mutex = {:?}", mutex);
+        debug!("semaphore = {:?}", semaphore);
+        for (id, task_) in inner.tasks.iter().enumerate() {
+            if let Some(task) = task_ {
+                let tinner = task.inner_exclusive_access();
+                debug!("tid = {}, wait_mutex = {:?}, wait_sem = {:?}", id, tinner.waiting_mutex, tinner.waiting_semaphore);
+                debug!("having_mutex = {:?}", tinner.having_mutex);
+                debug!("having_semaphore = {:?}", tinner.having_semaphore);
+            }
+        }
+
+        let mut safe = vec![false; inner.tasks.len()];
+        loop {
+            let mut all_safe  = true;
+            let mut modified = false;
+            for (id, task_) in inner.tasks.iter().enumerate() {
+                if let Some(task) = task_ {
+                    if safe[id] == false {
+                        let tinner = task.inner_exclusive_access();
+                        if (tinner.waiting_mutex.is_none() || mutex[tinner.waiting_mutex.unwrap()] != Some(true))
+                        && (tinner.waiting_semaphore.is_none() || semaphore[tinner.waiting_semaphore.unwrap()] != Some(0)) {
+                            safe[id] = true;
+                            modified = true;
+                            for (id, stat) in tinner.having_mutex.iter().enumerate() {
+                                if mutex[id].is_some() {
+                                    mutex[id] = Some(mutex[id].unwrap() ^ stat);
+                                }
+                            }
+                            for (id, cnt) in tinner.having_semaphore.iter().enumerate() {
+                                if semaphore[id].is_some() {
+                                    semaphore[id] = Some(semaphore[id].unwrap() + cnt);
+                                }
+                            }
+                        }
+                    }
+                    if safe[id] == false {
+                        all_safe = false;
+                    }
+                }
+            }
+            if all_safe {
+                debug!("safe");
+                return false;
+            }
+            if modified == false {
+                debug!("not safe");
+                return true;
+            }
+        }
     }
 }
